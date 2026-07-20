@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: fxs
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+
+      # Set BASE_URL AFTER first deploy — Render only gives you the real
+      # onrender.com URL once the service exists. Redeploy after setting it.
+      - key: BASE_URL
+        sync: false
+
+      # Supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # JWT — generate with: openssl rand -hex 32
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+
+      # IntaSend
+      - key: INTASEND_ENV
+        value: sandbox
+      - key: INTASEND_PUBLISHABLE_KEY
+        sync: false
+      - key: INTASEND_SECRET_KEY
+        sync: false
+      - key: INTASEND_WEBHOOK_CHALLENGE
+        generateValue: true
+
+      # Webhooks (FXS Pay -> merchant)
+      - key: WEBHOOK_MAX_RETRIES
+        value: 5

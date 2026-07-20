@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FXS Pay — Merchant Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0E1424;
+    --surface: #161D33;
+    --surface-raised: #1D2540;
+    --border: #2A3355;
+    --amber: #F2B134;
+    --teal: #21C7A8;
+    --danger: #E8604C;
+    --text: #EDF0F7;
+    --text-muted: #8891A8;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, .brand { font-family: 'Space Grotesk', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* ===== Layout ===== */
+  #app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .brand {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 32px;
+    padding-left: 4px;
+  }
+  .brand span { color: var(--amber); }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-item:hover { background: var(--surface-raised); color: var(--text); }
+  .nav-item.active { background: var(--surface-raised); color: var(--amber); }
+  .nav-spacer { flex: 1; }
+  .logout-btn {
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 10px 12px;
+  }
+  .logout-btn:hover { color: var(--danger); }
+
+  .main { flex: 1; padding: 32px 40px; max-width: 1100px; }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .topbar h1 { font-size: 22px; margin: 0; }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: 100px;
+  }
+  .badge.pending { background: rgba(242,177,52,0.15); color: var(--amber); }
+  .badge.approved { background: rgba(33,199,168,0.15); color: var(--teal); }
+  .badge.suspended { background: rgba(232,96,76,0.15); color: var(--danger); }
+
+  .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; margin-bottom: 20px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+  }
+  .card h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 0 0 16px 0;
+    font-weight: 600;
+  }
+
+  /* Balance card */
+  .balance-value { font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  .balance-currency { font-size: 16px; color: var(--text-muted); margin-left: 6px; }
+
+  /* Payment code "ticket stub" signature element */
+  .ticket {
+    position: relative;
+    background: linear-gradient(135deg, var(--surface-raised), var(--surface));
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    overflow: hidden;
+  }
+  .ticket::before, .ticket::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: var(--bg);
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .ticket::before { left: -9px; }
+  .ticket::after { right: -9px; }
+  .ticket-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+  .ticket-code { font-size: 26px; font-weight: 600; letter-spacing: 0.08em; color: var(--amber); }
+  .ticket-hint { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+
+  /* Forms */
+  label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+  input, select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    margin-bottom: 14px;
+  }
+  input:focus, select:focus, button:focus, .nav-item:focus {
+    outline: 2px solid var(--teal);
+    outline-offset: 1px;
+  }
+  input.mono { font-family: 'IBM Plex Mono', monospace; }
+  button {
+    background: var(--amber);
+    color: #1A1200;
+    border: none;
+    padding: 11px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); }
+  button.link { background: none; color: var(--teal); padding: 0; font-weight: 500; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--text-muted); font-weight: 500; padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 12px 8px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+  .status-success .status-dot { background: var(--teal); }
+  .status-pending .status-dot { background: var(--amber); }
+  .status-failed .status-dot { background: var(--danger); }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+
+  /* Auth screen */
+  .auth-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .auth-card { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; }
+  .auth-card .brand { text-align: center; margin-bottom: 4px; }
+  .auth-sub { text-align: center; color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+  .auth-toggle { text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 16px; }
+  .error-msg { color: var(--danger); font-size: 13px; margin: -6px 0 14px 0; }
+  .field-row { display: flex; gap: 8px; }
+  .field-row > div { flex: 1; }
+
+  .key-reveal {
+    background: rgba(33,199,168,0.08);
+    border: 1px solid var(--teal);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+  .key-reveal .mono { word-break: break-all; font-size: 13px; }
+
+  .config-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-raised);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+
+  ::selection { background: var(--amber); color: #1A1200; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ============================================================
+// FXS Pay Dashboard — single-file vanilla JS app
+// Stores API base URL + JWT in localStorage (this is a standalone
+// deployed site, not a sandboxed artifact, so browser storage is fine here).
+// ============================================================
+
+const state = {
+  apiBase: localStorage.getItem('fxs_api_base') || '',
+  token: localStorage.getItem('fxs_token') || '',
+  merchant: null,
+  view: 'overview',
+};
+
+const root = document.getElementById('app');
+
+async function api(path, options = {}) {
+  const res = await fetch(state.apiBase + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(state.token ? { Authorization: 'Bearer ' + state.token } : {}),
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+function fmtMoney(n) {
+  return Number(n).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(d) {
+  return new Date(d).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// ---------- Render: entry point ----------
+function render() {
+  if (!state.apiBase) return renderConfig();
+  if (!state.token) return renderAuth();
+  renderDashboard();
+}
+
+// ---------- Config screen (first run: set API base URL) ----------
+function renderConfig() {
+  root.innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="brand">FXS <span>Pay</span></div>
+        <div class="auth-sub">Connect to your backend</div>
+        <div class="config-note">Enter your Render API URL, e.g. https://fxs-j0zf.onrender.com — no trailing slash.</div>
+        <label>API Base URL</label>
+        <input id="cfg-url" class="mono" placeholder="https://your-app.onrender.com" />
+        <button style="width:100%" onclick="saveConfig()">Continue</button>
+      </div>
+    </div>`;
+}
+function saveConfig() {
+  const val = document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
+  if (!val) return;
+  state.apiBase = val;
+  localStorage.setItem('fxs_api_base', val);
+  render();
+}
+
+// ---------- Auth screen (login / register) ----------
+let authMode = 'login';
+function renderAuth() {
+  const isLogin = authMode === 'login';
+  root.innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="brand">FXS <span>Pay</span></div>
+        <div class="auth-sub">${isLogin ? 'Log in to your merchant account' : 'Create your merchant account'}</div>
+        <div id="auth-error"></div>
+        ${!isLogin ? `<label>Business name</label><input id="a-business" placeholder="Your Business Ltd" />` : ''}
+        <label>Email</label>
+        <input id="a-email" type="email" placeholder="you@business.com" />
+        <label>Password</label>
+        <input id="a-password" type="password" placeholder="••••••••" />
+        <button style="width:100%" onclick="submitAuth()">${isLogin ? 'Log in' : 'Create account'}</button>
+        <div class="auth-toggle">
+          ${isLogin ? "Don't have an account? " : "Already have an account? "}
+          <button class="link" onclick="toggleAuthMode()">${isLogin ? 'Register' : 'Log in'}</button>
+        </div>
+      </div>
+    </div>`;
+}
+function toggleAuthMode() { authMode = authMode === 'login' ? 'register' : 'login'; renderAuth(); }
+
+async function submitAuth() {
+  const email = document.getElementById('a-email').value.trim();
+  const password = document.getElementById('a-password').value;
+  const errorEl = document.getElementById('auth-error');
+  errorEl.innerHTML = '';
+  try {
+    let data;
+    if (authMode === 'login') {
+      data = await api('/api/merchant/login', { method: 'POST', body: { email, password } });
+    } else {
+      const businessName = document.getElementById('a-business').value.trim();
+      data = await api('/api/merchant/register', { method: 'POST', body: { businessName, email, password } });
+    }
+    state.token = data.token;
+    state.merchant = data.merchant;
+    localStorage.setItem('fxs_token', data.token);
+    render();
+  } catch (err) {
+    errorEl.innerHTML = `<div class="error-msg">${err.message}</div>`;
+  }
+}
+
+function logout() {
+  state.token = '';
+  state.merchant = null;
+  localStorage.removeItem('fxs_token');
+  render();
+}
+
+// ---------- Dashboard shell ----------
+async function renderDashboard() {
+  if (!state.merchant) {
+    try {
+      const data = await api('/api/merchant/profile');
+      state.merchant = data.merchant;
+    } catch (err) {
+      logout();
+      return;
+    }
+  }
+
+  root.innerHTML = `
+    <div id="app-shell" style="display:flex; width:100%;">
+      <div class="sidebar">
+        <div class="brand">FXS <span>Pay</span></div>
+        ${navItem('overview', 'Overview')}
+        ${navItem('send', 'Send payment')}
+        ${navItem('transactions', 'Transactions')}
+        ${navItem('keys', 'API keys')}
+        <div class="nav-spacer"></div>
+        <div class="logout-btn" onclick="logout()">Log out</div>
+      </div>
+      <div class="main" id="main-content"></div>
+    </div>`;
+
+  renderView();
+}
+function navItem(id, label) {
+  return `<div class="nav-item ${state.view === id ? 'active' : ''}" onclick="setView('${id}')">${label}</div>`;
+}
+function setView(id) { state.view = id; renderDashboard(); }
+
+function renderView() {
+  const el = document.getElementById('main-content');
+  const badgeClass = state.merchant.status || 'pending';
+  el.innerHTML = `
+    <div class="topbar">
+      <h1>${escapeHtml(state.merchant.business_name)}</h1>
+      <span class="badge ${badgeClass}">${badgeClass}</span>
+    </div>
+    <div id="view-body"><div class="empty-state">Loading…</div></div>`;
+
+  if (state.view === 'overview') return loadOverview();
+  if (state.view === 'send') return renderSend();
+  if (state.view === 'transactions') return loadTransactions();
+  if (state.view === 'keys') return loadKeys();
+}
+
+// ---------- Overview ----------
+async function loadOverview() {
+  const body = document.getElementById('view-body');
+  try {
+    const { wallets } = await api('/api/wallet');
+    const kes = wallets.find(w => w.currency === 'KES');
+    body.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <h3>Wallet balance</h3>
+          <div class="balance-value mono">${kes ? fmtMoney(kes.balance) : '0.00'}<span class="balance-currency">KES</span></div>
+        </div>
+        <div class="ticket">
+          <div class="ticket-label">Payment reference code</div>
+          <div class="ticket-code mono">${state.merchant.account_code}</div>
+          <div class="ticket-hint">Customers use this as the Account Number when paying your Paybill directly.</div>
+        </div>
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Couldn't load wallet: ${err.message}</div>`;
+  }
+}
+
+// ---------- Send payment (STK push) ----------
+function renderSend() {
+  const body = document.getElementById('view-body');
+  body.innerHTML = `
+    <div class="card" style="max-width:420px;">
+      <h3>Trigger STK push</h3>
+      <div id="send-error"></div>
+      <div id="send-result"></div>
+      <label>Customer phone</label>
+      <input id="s-phone" class="mono" placeholder="2547XXXXXXXX" />
+      <label>Amount (KES)</label>
+      <input id="s-amount" class="mono" type="number" min="1" placeholder="100" />
+      <label>Description</label>
+      <input id="s-desc" placeholder="What is this payment for?" />
+      <button id="s-submit" onclick="submitStkPush()">Send prompt</button>
+    </div>`;
+}
+async function submitStkPush() {
+  const phone = document.getElementById('s-phone').value.trim();
+  const amount = parseFloat(document.getElementById('s-amount').value);
+  const description = document.getElementById('s-desc').value.trim();
+  const errorEl = document.getElementById('send-error');
+  const resultEl = document.getElementById('send-result');
+  const btn = document.getElementById('s-submit');
+  errorEl.innerHTML = ''; resultEl.innerHTML = '';
+  if (!phone || !amount) { errorEl.innerHTML = `<div class="error-msg">Phone and amount are required.</div>`; return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const data = await api('/api/mpesa/stk-push', { method: 'POST', body: { phone, amount, description } });
+    resultEl.innerHTML = `<div class="key-reveal">Prompt sent. Transaction ID: <span class="mono">${data.transactionId}</span></div>`;
+  } catch (err) {
+    errorEl.innerHTML = `<div class="error-msg">${err.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send prompt';
+  }
+}
+
+// ---------- Transactions ----------
+async function loadTransactions() {
+  const body = document.getElementById('view-body');
+  try {
+    const { transactions } = await api('/api/mpesa/transactions?limit=50');
+    if (!transactions.length) {
+      body.innerHTML = `<div class="card"><div class="empty-state">No transactions yet. Send your first payment prompt from "Send payment".</div></div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div class="card">
+        <table>
+          <thead><tr><th>Date</th><th>Method</th><th>Phone</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody>
+            ${transactions.map(t => `
+              <tr>
+                <td>${fmtDate(t.created_at)}</td>
+                <td>${t.method}</td>
+                <td class="mono">${t.customer_phone || '—'}</td>
+                <td class="mono">${fmtMoney(t.amount)} ${t.currency}</td>
+                <td class="status-${t.status === 'success' ? 'success' : t.status === 'failed' ? 'failed' : 'pending'}">
+                  <span class="status-dot"></span>${t.status}
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Couldn't load transactions: ${err.message}</div>`;
+  }
+}
+
+// ---------- API Keys ----------
+async function loadKeys() {
+  const body = document.getElementById('view-body');
+  try {
+    const { keys } = await api('/api/merchant/api-keys');
+    body.innerHTML = `
+      <div class="card" style="margin-bottom:20px; max-width:420px;">
+        <h3>Generate new key</h3>
+        <div id="key-error"></div>
+        <div id="key-reveal-area"></div>
+        <label>Label (optional)</label>
+        <input id="k-label" placeholder="e.g. Website integration" />
+        <label>Environment</label>
+        <select id="k-env">
+          <option value="live">Live</option>
+          <option value="test">Test</option>
+        </select>
+        <button onclick="generateKey()">Generate key</button>
+      </div>
+      <div class="card">
+        <h3>Existing keys</h3>
+        ${keys.length ? `
+          <table>
+            <thead><tr><th>Prefix</th><th>Label</th><th>Created</th><th>Last used</th></tr></thead>
+            <tbody>
+              ${keys.map(k => `
+                <tr>
+                  <td class="mono">${k.key_prefix}…</td>
+                  <td>${k.label || '—'}</td>
+                  <td>${fmtDate(k.created_at)}</td>
+                  <td>${k.last_used_at ? fmtDate(k.last_used_at) : 'Never'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : `<div class="empty-state">No keys yet.</div>`}
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Couldn't load keys: ${err.message}</div>`;
+  }
+}
+async function generateKey() {
+  const label = document.getElementById('k-label').value.trim();
+  const env = document.getElementById('k-env').value;
+  const errorEl = document.getElementById('key-error');
+  const revealEl = document.getElementById('key-reveal-area');
+  errorEl.innerHTML = ''; revealEl.innerHTML = '';
+  try {
+    const data = await api('/api/merchant/api-key', { method: 'POST', body: { env, label } });
+    revealEl.innerHTML = `
+      <div class="key-reveal">
+        <div style="margin-bottom:6px; color:var(--teal); font-weight:600; font-size:13px;">Copy this now — it won't be shown again</div>
+        <div class="mono">${data.apiKey}</div>
+      </div>`;
+    loadKeys();
+  } catch (err) {
+    errorEl.innerHTML = `<div class="error-msg">${err.message}</div>`;
+  }
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+render();
+</script>
+</body>
+</html>
