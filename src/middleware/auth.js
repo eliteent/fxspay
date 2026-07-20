@@ -106,4 +106,40 @@ async function requireMerchantAuth(req, res, next) {
   }
 }
 
-module.exports = { requireJwt, requireApiKey, requireAdminSecret, requireMerchantAuth };
+/**
+ * requireAdminAccess — accepts EITHER:
+ *   1. A valid JWT belonging to a merchant with is_admin = true (real admin
+ *      login, e.g. officialmosbee@gmail.com logging in normally), OR
+ *   2. The root X-Admin-Secret header (bootstrap access, e.g. promoting the
+ *      first admin before any admin accounts exist yet).
+ * Used for day-to-day admin actions (list/approve/suspend merchants).
+ */
+async function requireAdminAccess(req, res, next) {
+  const adminSecretHeader = req.headers['x-admin-secret'];
+  if (adminSecretHeader && process.env.ADMIN_SECRET && adminSecretHeader === process.env.ADMIN_SECRET) {
+    return next();
+  }
+
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token) {
+    try {
+      const payload = verifyToken(token);
+      const { data: merchant } = await supabase
+        .from('merchants')
+        .select('is_admin')
+        .eq('id', payload.sub)
+        .maybeSingle();
+      if (merchant?.is_admin) {
+        req.merchantId = payload.sub;
+        return next();
+      }
+    } catch (err) {
+      // fall through to the rejection below
+    }
+  }
+
+  return res.status(403).json({ error: 'Admin access required' });
+}
+
+module.exports = { requireJwt, requireApiKey, requireAdminSecret, requireMerchantAuth, requireAdminAccess };

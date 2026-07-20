@@ -5,6 +5,7 @@
 -- (before merchants.account_code existed), run this first instead of the
 -- whole file:
 --   alter table merchants add column if not exists account_code text unique;
+--   alter table merchants add column if not exists is_admin boolean not null default false;
 --   -- then backfill existing rows with a generated code before adding NOT NULL,
 --   -- e.g. update merchants set account_code = 'FXS' || substr(id::text, 1, 6) where account_code is null;
 --   -- alter table merchants alter column account_code set not null;
@@ -26,6 +27,7 @@ create table if not exists merchants (
   -- Customers paying via the shared FXS Pay Paybill type this code as the
   -- M-Pesa "Account Number" so incoming C2B payments route to this merchant.
   account_code text not null unique,
+  is_admin boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

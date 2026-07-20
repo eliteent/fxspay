@@ -45,7 +45,7 @@ async function suspendMerchant(req, res) {
 async function listMerchants(req, res) {
   let query = supabase
     .from('merchants')
-    .select('id, business_name, contact_email, status, kyc_status, account_code, created_at')
+    .select('id, business_name, contact_email, status, kyc_status, account_code, is_admin, created_at')
     .order('created_at', { ascending: false });
 
   if (req.query.status) {
@@ -57,4 +57,36 @@ async function listMerchants(req, res) {
   return res.json({ merchants });
 }
 
-module.exports = { approveMerchant, suspendMerchant, listMerchants };
+/**
+ * POST /api/admin/merchants/:merchantId/make-admin — root-secret-only.
+ * Grants a merchant account admin access, so they can use their own login
+ * for admin actions instead of the shared X-Admin-Secret.
+ */
+async function makeAdmin(req, res) {
+  const { data: merchant, error } = await supabase
+    .from('merchants')
+    .update({ is_admin: true, updated_at: new Date().toISOString() })
+    .eq('id', req.params.merchantId)
+    .select('id, business_name, contact_email, is_admin')
+    .single();
+
+  if (error || !merchant) return res.status(404).json({ error: 'Merchant not found' });
+  return res.json({ message: 'Merchant granted admin access', merchant });
+}
+
+/**
+ * POST /api/admin/merchants/:merchantId/revoke-admin — root-secret-only.
+ */
+async function revokeAdmin(req, res) {
+  const { data: merchant, error } = await supabase
+    .from('merchants')
+    .update({ is_admin: false, updated_at: new Date().toISOString() })
+    .eq('id', req.params.merchantId)
+    .select('id, business_name, contact_email, is_admin')
+    .single();
+
+  if (error || !merchant) return res.status(404).json({ error: 'Merchant not found' });
+  return res.json({ message: 'Admin access revoked', merchant });
+}
+
+module.exports = { approveMerchant, suspendMerchant, listMerchants, makeAdmin, revokeAdmin };
