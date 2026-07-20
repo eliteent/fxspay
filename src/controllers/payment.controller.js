@@ -17,6 +17,20 @@ async function initiateStkPush(req, res) {
   try {
     const wallet = await ledgerService.getOrCreateWallet(req.merchantId, 'KES');
 
+    // Paystack requires a real, validly-formatted email on every charge.
+    // Fall back to the merchant's own account email if the caller didn't
+    // supply a customer email (a synthetic placeholder domain gets rejected
+    // by Paystack's email validator).
+    let chargeEmail = email;
+    if (!chargeEmail) {
+      const { data: merchant } = await supabase
+        .from('merchants')
+        .select('contact_email')
+        .eq('id', req.merchantId)
+        .maybeSingle();
+      chargeEmail = merchant?.contact_email;
+    }
+
     const { data: transaction, error } = await supabase
       .from('transactions')
       .insert({
@@ -43,7 +57,7 @@ async function initiateStkPush(req, res) {
       amount,
       reference: transaction.id,
       narration: description,
-      email,
+      email: chargeEmail,
     });
 
     await supabase
