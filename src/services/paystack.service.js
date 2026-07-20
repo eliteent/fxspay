@@ -11,6 +11,18 @@ function authHeaders() {
 }
 
 /**
+ * Paystack requires Kenyan phone numbers in E.164 format with a leading
+ * '+' — e.g. +254722000000. Accepts common local formats (0722..., 722...,
+ * 254722..., +254722...) and normalizes them all to the same thing.
+ */
+function normalizePhone(phone) {
+  let digits = phone.replace(/[^\d]/g, ''); // strip everything except digits
+  if (digits.startsWith('0')) digits = '254' + digits.slice(1);
+  if (digits.startsWith('7') || digits.startsWith('1')) digits = '254' + digits;
+  return '+' + digits;
+}
+
+/**
  * Triggers an M-Pesa STK push via Paystack's Charge API.
  * Paystack requires an email on every charge even for mobile money — if the
  * merchant/customer doesn't have one on file, a placeholder tied to the
@@ -19,12 +31,12 @@ function authHeaders() {
  */
 async function initiateMpesaCharge({ phone, amount, reference, email, narration }) {
   const payload = {
-    email: email || `customer+${reference}@fxspay.invalid`,
+    email: email || `customer.${reference}@fxspay.co.ke`,
     amount: Math.round(amount * 100), // Paystack expects the amount in the smallest currency subunit (cents for KES)
     currency: 'KES',
     reference, // our own transaction id — Paystack echoes this back and includes it in webhooks
     mobile_money: {
-      phone,
+      phone: normalizePhone(phone),
       provider: 'mpesa',
     },
     metadata: { narration: narration || 'FXS Pay payment' },
