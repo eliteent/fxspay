@@ -189,15 +189,39 @@ POST /api/mpesa/checkout
 ```
 **Response `202`:**
 ```json
-{ "transactionId": "uuid-here", "authorizationUrl": "https://checkout.paystack.com/xxxxx" }
+{
+  "transactionId": "uuid-here",
+  "authorizationUrl": "https://checkout.paystack.com/xxxxx",
+  "accessCode": "xxxxx"
+}
 ```
 
-**What to do with `authorizationUrl`:** redirect the customer's browser to
-it (full page redirect, new tab, or an iframe — your choice). After they
-complete or cancel, Paystack redirects them back to a receipt page
-automatically. The same webhook (below) fires regardless of card, bank, or
-M-Pesa — your backend doesn't need separate logic per payment method beyond
-how you initiated it.
+**Two ways to use this — pick one:**
+
+**Option A — Popup (customer never leaves your page):**
+```html
+<script src="https://js.paystack.co/v2/inline.js"></script>
+<script>
+  const popup = new PaystackPop();
+  popup.resumeTransaction(accessCode, {   // accessCode from the response above
+    onSuccess: (transaction) => { /* show a success state */ },
+    onCancel: () => { /* customer closed the popup */ },
+    onError: (err) => { /* show err.message */ },
+  });
+</script>
+```
+This is what FXS Pay's own dashboard uses. Card/bank details are still typed
+into Paystack's own secure iframe inside the popup — you're still out of PCI
+scope — but visually the customer never navigates off your site.
+
+**Option B — Redirect (simpler, but leaves your domain):**
+Send the customer's browser to `authorizationUrl` directly (full page
+navigation or a new tab). After completing or cancelling, Paystack redirects
+back automatically. No extra script tag needed.
+
+Either way, the same webhook (below) fires when the payment resolves — your
+backend logic for crediting a wallet/order doesn't need to know or care
+which option the frontend used.
 
 ---
 
