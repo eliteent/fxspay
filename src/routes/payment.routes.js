@@ -5,6 +5,7 @@ const { requireMerchantAuth } = require('../middleware/auth');
 
 // Merchant-authenticated (JWT dashboard session or API key)
 router.post('/stk-push', requireMerchantAuth, paymentController.initiateStkPush);
+router.post('/checkout', requireMerchantAuth, paymentController.initiateCheckout);
 router.get('/status/:transactionId', requireMerchantAuth, paymentController.getStatus);
 router.get('/transactions', requireMerchantAuth, paymentController.listTransactions);
 
