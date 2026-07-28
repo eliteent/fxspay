@@ -127,6 +127,14 @@ async function handleWebhook(req, res) {
       paystackReference: event.reference,
       receiptUrl: `${process.env.BASE_URL}/api/mpesa/receipt/${transaction.id}`,
     });
+
+    // If this payment was for an airtime/bundle purchase, move it into the
+    // fulfillment queue now that money has actually landed.
+    await supabase
+      .from('bundle_orders')
+      .update({ status: 'queued', updated_at: new Date().toISOString() })
+      .eq('transaction_id', transaction.id)
+      .eq('status', 'awaiting_payment');
   } else if (event.event === 'charge.failed' || event.status === 'failed') {
     await supabase
       .from('transactions')
@@ -137,6 +145,13 @@ async function handleWebhook(req, res) {
       transactionId: transaction.id,
       reason: event.gatewayResponse,
     });
+
+    // Cancel any linked bundle order too — no point fulfilling an unpaid order.
+    await supabase
+      .from('bundle_orders')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('transaction_id', transaction.id)
+      .eq('status', 'awaiting_payment');
   }
   // Other events (e.g. still pending) just acknowledge without changing state.
 
@@ -224,4 +239,72 @@ async function getReceipt(req, res) {
   `);
 }
 
-module.exports = { initiateStkPush, handleWebhook, getStatus, getReceipt, listTransactions };
+/**
+ * POST /api/mpesa/checkout
+ * Initiates a card or Pesalink bank transfer payment. Returns a checkout URL
+ * — the CALLER (merchant's frontend / BetPro Win's app) must redirect the
+ * customer's browser to `authorizationUrl` to actually complete payment.
+ * Body: { method: 'card' | 'bank', amount, email, description }
+ */
+async function initiateCheckout(req, res) {
+  const { method, amount, email, description } = req.body;
+
+  if (!method || !['card', 'bank'].includes(method)) {
+    return res.status(400).json({ error: "method must be 'card' or 'bank'" });
+  }
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ error: 'A positive amount is required' });
+  }
+  if (!email) {
+    return res.status(400).json({ error: 'Customer email is required for card/bank checkout' });
+  }
+
+  try {
+    const wallet = await ledgerService.getOrCreateWallet(req.merchantId, 'KES');
+
+    const { data: transaction, error } = await supabase
+      .from('transactions')
+      .insert({
+        merchant_id: req.merchantId,
+        wallet_id: wallet.id,
+        type: 'deposit',
+        method, // 'card' or 'bank' — both already allowed by the transactions table's check constraint
+        amount,
+        currency: 'KES',
+        status: 'pending',
+        description: description || `FXS Pay ${method} deposit`,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const channels = method === 'card' ? ['card'] : ['bank_transfer'];
+    const callbackUrl = `${process.env.BASE_URL}/api/mpesa/receipt/${transaction.id}`;
+
+    const result = await paystack.initializeCheckout({
+      email,
+      amount,
+      reference: transaction.id,
+      callbackUrl,
+      channels,
+    });
+
+    await supabase
+      .from('transactions')
+      .update({ provider_reference: result.data.reference })
+      .eq('id', transaction.id);
+
+    return res.status(202).json({
+      message: `${method === 'card' ? 'Card' : 'Bank transfer'} checkout created.`,
+      transactionId: transaction.id,
+      authorizationUrl: result.data.authorization_url, // for a full-page redirect, if you ever want that instead
+      accessCode: result.data.access_code,             // for the in-page popup (customer never leaves your site) — see API_DOCS.md
+    });
+  } catch (err) {
+    const message = err.response?.data?.message || err.message;
+    return res.status(502).json({ error: `Paystack checkout failed: ${message}` });
+  }
+}
+
+module.exports = { initiateStkPush, handleWebhook, getStatus, getReceipt, listTransactions, initiateCheckout };
