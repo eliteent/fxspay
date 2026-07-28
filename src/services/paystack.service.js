@@ -90,4 +90,26 @@ function parseWebhookEvent(body) {
   };
 }
 
-module.exports = { initiateMpesaCharge, verifyTransaction, verifyWebhookSignature, parseWebhookEvent };
+/**
+ * Initializes a hosted Paystack Checkout session for card or bank transfer
+ * (Pesalink) payments. Unlike STK push, this does NOT charge anything
+ * server-side — it returns an authorization_url that the CUSTOMER's own
+ * browser must visit to enter card details or see bank transfer instructions.
+ * This keeps FXS Pay entirely out of PCI DSS scope: card numbers are typed
+ * directly into Paystack's hosted page, never sent to or stored by this backend.
+ */
+async function initializeCheckout({ email, amount, reference, callbackUrl, channels }) {
+  const payload = {
+    email,
+    amount: Math.round(amount * 100), // subunit, same as the mobile money charge
+    currency: 'KES',
+    reference,
+    callback_url: callbackUrl,
+    channels, // e.g. ['card'] or ['bank_transfer']
+  };
+
+  const { data } = await axios.post(`${BASE_URL}/transaction/initialize`, payload, { headers: authHeaders() });
+  return data; // { status: true, data: { authorization_url, access_code, reference } }
+}
+
+module.exports = { initiateMpesaCharge, verifyTransaction, verifyWebhookSignature, parseWebhookEvent, initializeCheckout };
